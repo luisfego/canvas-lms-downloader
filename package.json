@@ -4,12 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc --p tsconfig.json",
+    "start": "node build/index.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/fs-extra": "^5.0.5",
     "commander": "^2.20.0",
     "fs-extra": "^7.0.1",
     "lodash": "^4.17.11",
@@ -18,8 +18,10 @@
   },
   "devDependencies": {
     "@types/commander": "^2.12.2",
+    "@types/fs-extra": "^5.0.5",
     "@types/lodash": "^4.14.123",
     "@types/sanitize-filename": "^1.1.28",
-    "@types/superagent": "^4.1.1"
+    "@types/superagent": "^4.1.1",
+    "typescript": "^3.4.2"
   }
 }

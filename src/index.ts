@@ -14,7 +14,7 @@ commander
   .parse(process.argv);
 
 function commanderFail(message: string) {
-  console.error(message);
+  if (message) console.error(message);
   commander.help()
 }
 
@@ -30,44 +30,74 @@ for (const key of ['dir', 'url', 'token']) {
   }
 }
 
-async function getJson(path: string, query = {}) {
+// would be safer to use pagination, but most courses probably dont have more files,pages or announcments than this
+const PAGE_SIZE = 999999;
+
+interface Course {
+  id: number,
+  name: string,
+  course_code:string
+}
+
+interface File {
+  folder_id: number,
+  filename: string,
+  url: string, // link to download actual bytes of files
+  modified_at: string, // timestamp
+}
+
+interface Folder {
+  id: number,
+  full_name: string // folder path relative to course/<id>/files
+}
+
+interface Page {
+  url: string;
+  updated_at: string;
+}
+
+interface Announcement {
+  id:string;
+  title:string;
+  created_at: string;
+  message:string;
+}
+
+async function fIfNeeded(f:()=>void, destPath:string, mtime:Date){
+  // check if a file already exists at destPath and has a certain last modified time.
+  // if not, then execute the passed function. which should cause a file to be created at destPath.
+  // then the modification time applied to the newly created file.
+  if ((await fs.pathExists(destPath)) && mtime.getTime() === (await fs.stat(destPath)).mtime.getTime()) {
+    console.info(`[SKIP] ${destPath}`);
+    return;
+  }
+  else await f();
+  console.info(`[WRITE] ${destPath}`);
+  await fs.utimes(destPath, new Date(), mtime);
+}
+
+async function getJson(url: string, query = {}) {
+  query = {per_page:PAGE_SIZE, ...query};
   const response = await request
-    .get(`${commander.url}${path}`)
-    // .query(args)
+    .get(url)
     .set('Authorization', `Bearer ${commander.token}`)
     .set("Accept", 'application/json')
     .query(query)
     .catch(e => {
-      throw new Error(`${e.response.header.status} (path:${path}${false ? ', query:' + JSON.stringify({}) : ''})`);
+      console.error(`[${e.response.header.status}] ${url} query:${JSON.stringify(query)}`);
     });
-  return response.body;
-}
-
-async function getFile(url: string, destPath: string, mtime: Date) {
-  await new Promise((resolve, reject) => {
-    var stream = fs.createWriteStream(destPath);
-    stream.on('finish', function() {
-      resolve()
-    });
-    stream.on('error', function(e) {
-      reject(e)
-    })
-    return request.get(url)
-      .set('Authorization', `Bearer ${commander.token}`)
-      .pipe(stream);
-  })
-  await fs.utimes(destPath, new Date(), mtime)
+  if (response) return response.body;
 }
 
 async function downloadFiles(c: Course, courseDir: string) {
   // files are flat, folders data needed to replicate canvas folder structure
-  const folders = await getJson(`courses/${c.id}/folders`, { per_page: 999 }) as {
-    id: number, //  folder_id of File
-    full_name: string // folder path relative to course/<id>/files
-  }[];
+  const folders = await getJson(`${commander.url}/courses/${c.id}/folders`) as Folder[];
+  if (!folders) return;
 
   // get list of files from canvas
-  const files = await getJson(`courses/${c.id}/files`, { per_page: 999 }) as File[];
+  const files = await getJson(`${commander.url}/courses/${c.id}/files`) as File[];
+  if (!files) return;
+
   // sort by date with most recently modified first
   const sortedFiles = (files).sort((a, b) => new Date(b.modified_at).getTime() - new Date(a.modified_at).getTime())
   // remove files with duplicate paths, keeping the most recently modified in case of conflict (guaranteed due to sort direction)
@@ -79,44 +109,52 @@ async function downloadFiles(c: Course, courseDir: string) {
     const folder = path.resolve(courseDir, santizedCanvasFoldername);
     await fs.mkdirs(folder)
     const destPath = path.resolve(folder, file.filename);
-    const canvasMtime = new Date(file.modified_at);
-    if ((await fs.pathExists(destPath)) && canvasMtime.getTime() === (await fs.stat(destPath)).mtime.getTime()) {
-      console.info(`[SKIP] ${c.name}/${canvasFoldername}/${file.filename}`);
-    } else {
-      console.info(`[ DL ] ${c.name}/${canvasFoldername}/${file.filename}`);
-      await getFile(file.url, destPath, new Date(file.modified_at));
-    }
+
+    await fIfNeeded(
+      ()=>new Promise((resolve, reject) => {
+        var stream = fs.createWriteStream(destPath);
+        stream.on('finish', function() {
+          resolve()
+        });
+        stream.on('error', function(e) {
+          reject(e)
+        })
+        return request.get(file.url)
+          .set('Authorization', `Bearer ${commander.token}`)
+          .pipe(stream);
+      }),
+      destPath,
+      new Date(file.modified_at)
+    )
   }
 }
 
+
 async function downloadPages(c: Course, courseDir: string) {
-  const pages = await getJson(`courses/${c.id}/pages`);
+  const pages = await getJson(`${commander.url}/courses/${c.id}/pages`) as Page[];
+  if (!pages) return;
   const pagesDir = path.resolve(courseDir, 'pages');
   await fs.mkdirp(pagesDir);
   for (const page of pages) {
-    const filePath = path.resolve(pagesDir, santizeFilename(page.url) + ".html")
-    const canvasMtime = new Date(page.updated_at);
-    if (await fs.pathExists(filePath) && (await fs.stat(filePath)).mtime.getTime() === canvasMtime.getTime()) {
-      console.info(`[SKIP] ${filePath}`)
-      continue;
-    }
-    const r = await request.get(`${commander.url}/courses/${c.id}/pages/${page.url}`).query({ per_page: 999 }).set("Authorization", `Bearer ${commander.token}`);
-    const pageData = r.body;
-    await fs.writeFile(filePath, pageData.body);
-    await fs.utimes(filePath, new Date(), canvasMtime);
-    console.info(`[ DL ] ${filePath}`)
+    const destPath = path.resolve(pagesDir, santizeFilename(page.url) + ".html");
+    await fIfNeeded(async ()=>{
+      const r = await request.get(`${commander.url}/courses/${c.id}/pages/${page.url}`).query({ per_page: PAGE_SIZE }).set("Authorization", `Bearer ${commander.token}`);
+      const pageData = r.body;
+      await fs.writeFile(destPath, pageData.body)},
+      destPath,
+      new Date(page.updated_at)
+    )
   }
 }
-
 async function downloadAnnouncements(c: Course, courseDir: string) {
-  const announcements = await getJson(`/announcements`, { 'context_codes[]': `course_${c.id}`, per_page: 999 });
-
-  if (announcements) {
-    const announcementsDir = path.resolve(courseDir, 'announcements');
-    await fs.mkdirp(announcementsDir)
-    for (const a of announcements) {
-      await fs.writeFile(path.resolve(announcementsDir, santizeFilename(a.title + '_' + a.id) + '.html'), a.message);
-    }
+  const announcements = await getJson(`${commander.url}/announcements`, { 'context_codes[]': `course_${c.id}` }) as Announcement[];
+  if (!announcements) return;
+  const announcementsDir = path.resolve(courseDir, 'announcements');
+  await fs.mkdirp(announcementsDir)
+  for (const a of announcements) {
+    const canvasMtime = new Date(a.created_at);
+    const destPath = path.resolve(announcementsDir, santizeFilename(a.title + '_' + a.id) + '.html');
+    await fIfNeeded(()=>{fs.writeFile(destPath, a.message)},destPath,canvasMtime)
   }
 }
 
@@ -124,24 +162,27 @@ async function run() {
 
   const courseName = commander.course;
   const targetFolder = commander.dir;
-  if (!targetFolder) throw new Error('pls specify target ');
 
-  const courses = await getJson('courses') as Course[];
+  const courses = await getJson(`${commander.url}/courses`, {per_page:PAGE_SIZE}) as Course[];
+  if (!courses) return;
   const coursesToProcess = courseName ? courses.filter(a => a.name === courseName || a.course_code === courseName) : courses;
   if (!coursesToProcess) {
-    throw new Error("Found no courses to download");
+    console.info("Found no courses to download");
+    return;
   }
 
   await fs.mkdirp(targetFolder);
 
   for (const c of coursesToProcess) {
+
+    console.info(`\n> Downloading from ${c.course_code} ${c.name}`);
+
     const courseDir = path.resolve(targetFolder, santizeFilename(c.name));
     await fs.mkdirp(courseDir);
 
-
-    await downloadFiles(c, courseDir);
-    await downloadPages(c, courseDir);
-    await downloadAnnouncements(c, courseDir);
+    await downloadFiles(c, courseDir).catch(console.error);
+    await downloadPages(c, courseDir).catch(console.error);
+    await downloadAnnouncements(c, courseDir).catch(console.error);
   }
 }
 
