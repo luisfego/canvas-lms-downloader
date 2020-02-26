@@ -1,9 +1,9 @@
 import * as request from 'superagent';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import * as commander from 'commander';
-import * as santizeFilename from 'sanitize-filename';
-import * as lodash from 'lodash';
+import commander from 'commander';
+import filenamify from "filenamify";
+import lodash from 'lodash';
 
 commander
   .option('-c --course [course]', "Course to download (name or code)", String)
@@ -30,6 +30,9 @@ for (const key of ['dir', 'url', 'token']) {
   }
 }
 
+function santizeFilename(s:string){
+  return filenamify(s).replace(/\s/g,'_')
+}
 // would be safer to use pagination, but most courses probably dont have more files,pages or announcments than this
 const PAGE_SIZE = 999999;
 
@@ -63,7 +66,33 @@ interface Announcement {
   message:string;
 }
 
-async function fIfNeeded(f:()=>void, destPath:string, mtime:Date){
+interface Module {
+  id: number,
+  name: string,
+  position: number,
+  unlock_at: null|any,
+  require_sequential_progress: boolean,
+  publish_final_grade: boolean,
+  prerequisite_module_ids: Array<any>,
+  state: 'completed'|string,
+  completed_at: string, // iso date string
+  items_count: number,
+  items_url: string;
+}
+interface ModuleItem  {
+    id: number,
+    title: string,
+    position: number,
+    indent: number,
+    type: 'Assignment'|string,
+    module_id: number,
+    html_url: string,
+    content_id: number,
+    url: string;
+  }
+
+
+async function fIfNeeded(f:()=>Promise<void>, destPath:string, mtime:Date){
   // check if a file already exists at destPath and has a certain last modified time.
   // if not, then execute the passed function. which should cause a file to be created at destPath.
   // then the modification time applied to the newly created file.
@@ -113,19 +142,50 @@ async function downloadFiles(c: Course, courseDir: string) {
     await fIfNeeded(
       ()=>new Promise((resolve, reject) => {
         var stream = fs.createWriteStream(destPath);
-        stream.on('finish', function() {
-          resolve()
-        });
-        stream.on('error', function(e) {
-          reject(e)
-        })
-        return request.get(file.url)
+        stream.on('finish',resolve);
+        stream.on('error', reject)
+        request.get(file.url)
           .set('Authorization', `Bearer ${commander.token}`)
           .pipe(stream);
       }),
       destPath,
       new Date(file.modified_at)
     )
+  }
+}
+async function downloadModules(c: Course, courseDir: string) {
+  // files are flat, folders data needed to replicate canvas folder structure
+  const modules = await getJson(`${commander.url}/courses/${c.id}/modules`) as Module[];
+  for (let module of modules){
+
+    const canvasFoldername = `modules/${module.name}`//folders.find(f => f.id === file.folder_id).full_name;
+    const santizedCanvasFoldername = path.resolve(courseDir, ...canvasFoldername.split('/').map(n => santizeFilename(n))).replace(/\s/g,'_');
+    const folder = path.resolve(courseDir, santizedCanvasFoldername);
+    await fs.mkdirs(folder)
+
+    const items = await getJson(module.items_url) as ModuleItem[];
+    for (let item of items){
+      // this can be any of a number of different interfaces.
+      // it might contain a download link for a file which is not available under the /files api
+      const thing = await getJson(item.url)
+
+      if (!thing.url||!thing.filename) continue;
+      const destPath = path.resolve(folder, thing.filename);
+
+
+      await fIfNeeded(
+        ()=>new Promise((resolve, reject) => {
+          var stream = fs.createWriteStream(destPath);
+          stream.on('finish', resolve);
+          stream.on('error', reject)
+          request.get(thing.url)
+            .set('Authorization', `Bearer ${commander.token}`)
+            .pipe(stream);
+        }),
+        destPath,
+        new Date(thing.modified_at)
+      )
+    }
   }
 }
 
@@ -154,7 +214,7 @@ async function downloadAnnouncements(c: Course, courseDir: string) {
   for (const a of announcements) {
     const canvasMtime = new Date(a.created_at);
     const destPath = path.resolve(announcementsDir, santizeFilename(a.title + '_' + a.id) + '.html');
-    await fIfNeeded(()=>{fs.writeFile(destPath, a.message)},destPath,canvasMtime)
+    await fIfNeeded(()=>fs.writeFile(destPath, a.message),destPath,canvasMtime)
   }
 }
 
@@ -177,12 +237,13 @@ async function run() {
 
     console.info(`\n> Downloading from ${c.course_code} ${c.name}`);
 
-    const courseDir = path.resolve(targetFolder, santizeFilename(c.name));
+    const courseDir = path.resolve(targetFolder, santizeFilename(c.name)+"_"+c.id);
     await fs.mkdirp(courseDir);
 
     await downloadFiles(c, courseDir).catch(console.error);
     await downloadPages(c, courseDir).catch(console.error);
     await downloadAnnouncements(c, courseDir).catch(console.error);
+    await downloadModules(c, courseDir).catch(console.error);
   }
 }
 

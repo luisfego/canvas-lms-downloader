@@ -2,8 +2,10 @@
 
 This is a script for downloading the contents of course pages of a Canvas LMS instance to your machine.
 
-It downloaded all files, 'Pages' and 'Announcements'.
+It downloads all files, 'Pages', 'Announcements', and files linked to in "Modules" (since the files index for a course might throw 401 while the individual files might not).
 It could be extended to download more content.
+
+i update this whenever the script doesn't get all the things i want for a course. 
 
 ## Installation
 
@@ -20,6 +22,14 @@ cd canvas-lms-downloader && npm ci && npm run build
 You'll need an access token to the target Canvas LMS instance.
 You can get generate one in your account settings in Canvas.
 
-```
-npm start -- --token yourtoken --url 'https://canvas.vu.nl/api/v1/' --course "Software Testing" --dir canvasdata`
+```bash
+CANVAS_TOKEN="your canvas api token, retrieved through the canvas ui"
+CANVAS_URL="https://canvas.vu.nl/api/v1/"
+LOCAL_DATA_DIR="~/canvas" # where you want the downloaded data
+
+# download for a specific course
+npm start -- --token "${CANVAS_TOKEN}" --url "${CANVAS_URL}" --dir $LOCAL_DATA_DIR --course "Software Testing"
+
+# download for all courses
+npm start -- --token "${CANVAS_TOKEN}" --url "${CANVAS_URL}" --dir $LOCAL_DATA_DIR --all
 ```

@@ -2,7 +2,8 @@
     "compilerOptions": {
         "module": "commonjs",
         "outDir": "build",
-        "sourceMap": true
+        "sourceMap": true,
+        "esModuleInterop":true
     },
     "rootDir": true,
     "compileOnSave": true,
