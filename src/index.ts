@@ -167,6 +167,10 @@ async function downloadModules(c: Course, courseDir: string) {
     for (let item of items){
       // this can be any of a number of different interfaces.
       // it might contain a download link for a file which is not available under the /files api
+
+      // Item can contain an external url, in which case we skip it
+      if (item.url == undefined) continue;
+
       const thing = await getJson(item.url)
 
       if (!thing.url||!thing.filename) continue;
