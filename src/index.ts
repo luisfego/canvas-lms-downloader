@@ -4,6 +4,8 @@ import * as path from 'path';
 import commander from 'commander';
 import filenamify from "filenamify";
 import lodash from 'lodash';
+import * as mustache from 'mustache';
+import { readFileSync } from 'fs';
 
 commander
   .option('-c --course [course]', "Course to download (name or code)", String)
@@ -88,7 +90,8 @@ interface ModuleItem  {
     module_id: number,
     html_url: string,
     content_id: number,
-    url: string;
+    url: string,
+    external_url: string;
   }
 
 
@@ -163,12 +166,16 @@ async function downloadModules(c: Course, courseDir: string) {
     const folder = path.resolve(courseDir, santizedCanvasFoldername);
     await fs.mkdirs(folder)
 
+    let external_urls: ModuleItem[] = [];
     const items = await getJson(module.items_url) as ModuleItem[];
     for (let item of items){
       // this can be any of a number of different interfaces.
       // it might contain a download link for a file which is not available under the /files api
 
-      // Item can contain an external url, in which case we skip it
+      // Export external links to a text file
+      if (item.external_url != undefined)
+        external_urls.push(item);
+
       if (item.url == undefined) continue;
 
       const thing = await getJson(item.url)
@@ -189,6 +196,24 @@ async function downloadModules(c: Course, courseDir: string) {
         destPath,
         new Date(thing.modified_at)
       )
+    }
+
+    // Write a markdown file with all the extenal URLs
+    if (external_urls.length > 0) {
+      const template = `
+        # ${module.name} 
+
+        {{#.}}
+        - [{{{title}}}]({{{external_url}}})
+        {{/.}}
+      `
+
+      const md = mustache.render(template, external_urls);
+      const destPath = path.resolve(folder, 'External_urls.md');
+
+      fs.writeFileSync(destPath, md);
+      console.info(`[WRITE] ${destPath}`);
+      
     }
   }
 }

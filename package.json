@@ -14,12 +14,14 @@
     "filenamify": "^4.1.0",
     "fs-extra": "^8.1.0",
     "lodash": "^4.17.15",
+    "mustache": "^4.2.0",
     "superagent": "^5.2.2"
   },
   "devDependencies": {
-    "@types/node": "^13.7.6",
     "@types/fs-extra": "^8.1.0",
     "@types/lodash": "^4.14.149",
+    "@types/mustache": "^4.2.1",
+    "@types/node": "^13.7.6",
     "@types/superagent": "^4.1.7",
     "typescript": "^3.4.2"
   }
