@@ -49,6 +49,8 @@ interface File {
   filename: string,
   url: string, // link to download actual bytes of files
   modified_at: string, // timestamp
+  locked_for_user: boolean,
+  lock_explanation: string
 }
 
 interface Folder {
@@ -136,10 +138,18 @@ async function downloadFiles(c: Course, courseDir: string) {
   const uniqueFiles = lodash.uniqBy(sortedFiles, f => `${f.folder_id} ${f.filename}`);
 
   for (const file of uniqueFiles) {
+
+    // Some files are locked and not available for download, which causes the script to silently fail
+    if (file.locked_for_user) {
+      console.info(`[INFO] File \'${file.filename}\' skipped. Reason: ${file.lock_explanation}`);
+      continue;
+    }
+
     const canvasFoldername = folders.find(f => f.id === file.folder_id).full_name;
     const santizedCanvasFoldername = path.resolve(courseDir, ...canvasFoldername.split('/').map(n => santizeFilename(n)));
     const folder = path.resolve(courseDir, santizedCanvasFoldername);
     await fs.mkdirs(folder)
+    
     const destPath = path.resolve(folder, file.filename);
 
     await fIfNeeded(
@@ -182,7 +192,6 @@ async function downloadModules(c: Course, courseDir: string) {
 
       if (!thing.url||!thing.filename) continue;
       const destPath = path.resolve(folder, thing.filename);
-
 
       await fIfNeeded(
         ()=>new Promise((resolve, reject) => {
