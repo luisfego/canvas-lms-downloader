@@ -33,7 +33,7 @@ for (const key of ['dir', 'url', 'token']) {
 }
 
 function santizeFilename(s:string){
-  return filenamify(s).replace(/\s/g,'_')
+  return filenamify(s).replace(/\s|\+/g,'_')
 }
 // would be safer to use pagination, but most courses probably dont have more files,pages or announcments than this
 const PAGE_SIZE = 999999;
@@ -150,7 +150,7 @@ async function downloadFiles(c: Course, courseDir: string) {
     const folder = path.resolve(courseDir, santizedCanvasFoldername);
     await fs.mkdirs(folder)
     
-    const destPath = path.resolve(folder, file.filename);
+    const destPath = path.resolve(folder, santizeFilename(file.filename));
 
     await fIfNeeded(
       ()=>new Promise((resolve, reject) => {
