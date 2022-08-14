@@ -350,7 +350,11 @@ async function run() {
 
   if (!courses) return;
 
-  const coursesToProcess = courseName ? courses.filter(a => a.name === courseName || a.course_code === courseName) : courses;
+  let coursesToProcess = courseName ? courses.filter(a => a.name === courseName || a.course_code === courseName) : courses;
+
+  // Filter courses that are not available
+  coursesToProcess = coursesToProcess.filter(a => a.name != undefined);
+
   
   if (!coursesToProcess) {
     console.info("Found no courses to download");
