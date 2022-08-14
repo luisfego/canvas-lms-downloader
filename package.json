@@ -4,17 +4,22 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc --p tsconfig.json",
+    "clean": "rimraf build/*",
+    "copy": "copyfiles -u 1 src/**/*.mustache build",
+    "build": "npm run clean && npm run copy && tsc --p tsconfig.json",
     "start": "node build/index.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google-cloud/storage": "^6.3.0",
     "commander": "^4.1.1",
     "filenamify": "^4.1.0",
     "fs-extra": "^8.1.0",
     "lodash": "^4.17.15",
     "mustache": "^4.2.0",
+    "rimraf": "^3.0.2",
+    "stream": "^0.0.2",
     "superagent": "^5.2.2"
   },
   "devDependencies": {
@@ -23,6 +28,7 @@
     "@types/mustache": "^4.2.1",
     "@types/node": "^13.7.6",
     "@types/superagent": "^4.1.7",
+    "copyfiles": "^2.4.1",
     "typescript": "^3.4.2"
   }
 }

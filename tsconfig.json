@@ -3,7 +3,8 @@
         "module": "commonjs",
         "outDir": "build",
         "sourceMap": true,
-        "esModuleInterop":true
+        "esModuleInterop":true, 
+        "target": "ES5"
     },
     "rootDir": true,
     "compileOnSave": true,

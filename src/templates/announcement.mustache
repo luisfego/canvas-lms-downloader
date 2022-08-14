@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <link  href="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/4.4.0/mdb.min.css" rel="stylesheet"/>
+  </head>
+  <body>
+   
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-sm-6">
+        <div class="card">
+        
+          <div class="card-header">
+            <h1>{{title}}</h1>
+          </div>
+      
+          <div class="card-header">
+            <img src="{{author.avatar_image_url}}" onerror="this.src='https://www.gravatar.com/avatar?d=mp&s=50'"
+                 class="rounded-circle float-start me-2" 
+                 style="width: 50px; height:50px; text-indent: -10000px" />
+            <div><strong>{{author.display_name}}</strong></div>
+            <small>{{posted_at}}</small>
+          </div>
+
+          <div class="card-body">
+            <main>
+              {{{message}}}
+            </main>
+          </div>
+      
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  
+  
+      
+  </body>
+</html>
