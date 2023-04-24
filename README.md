@@ -11,7 +11,10 @@ i update this whenever the script doesn't get all the things i want for a course
 
 ```
 # clone this repository
-git clone https://github.com/Ysgorg/canvas-lms-downloader.git
+git clone https://github.com/luisfego/canvas-lms-downloader.git
+
+# switch to latest development branch
+git checkout gcp
 
 # install dependencies and build
 cd canvas-lms-downloader && npm ci && npm run build
